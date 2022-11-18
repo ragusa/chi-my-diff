@@ -30,3 +30,16 @@
 *.exe
 *.out
 *.app
+
+*.make
+*.cmake
+*.json
+chi_build/CMakeFiles/*
+build/*
+bin/*
+chi_build/*.*vtu
+chi_build/CMakeCache.txt
+Makefile
+chi_build/Makefile
+chi_build/CFEMDiffSolver/*
+
