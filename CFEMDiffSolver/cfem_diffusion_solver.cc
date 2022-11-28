@@ -167,20 +167,81 @@ void cfem_diffusion::Solver::Execute()
         cell_rhs[i] += 1.0 * qp_data.ShapeValue(i, qp) * qp_data.JxW(qp);
     }//for i
  
-    //======================= Flag nodes for being on dirichlet boundary
-    std::vector<bool> node_boundary_flag(num_nodes, false);
+    //======================= Flag nodes for being on a boundary
+    std::vector<int> dirichlet_count(num_nodes, 0);
+    std::vector<double> dirichlet_value(num_nodes, 0.0);
+
     const size_t num_faces = cell.faces.size();
     for (size_t f=0; f<num_faces; ++f)
     {
       const auto& face = cell.faces[f];
-      if (face.has_neighbor) continue;
- 
-      const size_t num_face_nodes = face.vertex_ids.size();
-      for (size_t fi=0; fi<num_face_nodes; ++fi)
+      // not a boundary face
+	  if (face.has_neighbor) continue; 
+	  
+	  // Get type of boundary
+	  int ir_boundary_index = cell.faces[f].neighbor_id;
+      auto ir_boundary_type  = boundaries[ir_boundary_index]->type;
+	  
+	  // Robin boundary
+	  if (ir_boundary_type == BoundaryType::Robin)
       {
-        const uint i = cell_mapping.MapFaceNode(f,fi);
-        node_boundary_flag[i] = true;
-      }//for fi
+        auto robin_bndry =
+          (cfem_diffusion::BoundaryRobin*)boundaries[ir_boundary_index];
+ 
+		const auto  qp_face_data = cell_mapping.MakeFaceQuadraturePointData( face );
+		const size_t num_face_nodes = face.vertex_ids.size();
+
+        // true Robin when a/=0, otherwise, it is a Neumann:
+		// Assert if b=0
+		if (std:fabs(robin_bndry->b) < 1e-8)
+		  Assert('if b=0, this is a Dirichlet BC, not a Robin BC')
+		  
+		// loop over nodes of that face
+		for (size_t fi=0; fi<num_face_nodes; ++fi)
+		{
+		  const uint i = cell_mapping.MapFaceNode(f,fi);
+		    
+		  double entry_rhsi = 0.0;
+		  for (size_t qp : qp_face_data.QuadraturePointIndices())
+		  {
+			entry_rhsi +=  qp_data.Shape(i, qp) * qp_data.JxW(qp);
+          }//for qp
+		  cell_rhs[i] +=  (robin_bndry->f) * entry_rhsi;
+		    
+		  // only do this part if true Robin (i.e., a>0)
+		  if )std:fabs(robin_bndry->a) > 1.0e-8)
+		  {
+			for (size_t fj=0; fj<num_face_nodes; ++fj)
+		    {
+		      const uint j = cell_mapping.MapFaceNode(f,fj);
+			
+			  double entry_aij = 0.0;
+			  for (size_t qp : qp_face_data.QuadraturePointIndices())
+			  {
+			    entry_aij +=  qp_data.Shape(i, qp).Dot(qp_data.Shape(j, qp)) *
+                   qp_data.JxW(qp);
+              }//for qp
+			  Acell[i][j] += (robin_bndry->a)/(robin_bndry->b) * entry_aij;
+		    }//for fj
+		  }//end true Robin
+		}//for fi
+      }//if Robin
+	  
+	  // Dirichlet boundary
+	  if (ir_boundary_type == BoundaryType::Dirichlet)
+      {
+        auto dirichlet_bndry  =
+          (cfem_diffusion::BoundaryDirichlet*)boundaries[ir_boundary_index];
+ 		const size_t num_face_nodes = face.vertex_ids.size();
+		// loop over nodes of that face
+		for (size_t fi=0; fi<num_face_nodes; ++fi)
+		{
+		  const uint i = cell_mapping.MapFaceNode(f,fi);
+          dirichlet_count[i] += 1;
+          dirichlet_value[i] += dirichlet_bndry->boundary_value;
+        }//for fi
+      }//if Dirichlet
+	  
     }//for face f
  
     //======================= Develop node mapping
@@ -191,17 +252,22 @@ void cfem_diffusion::Solver::Execute()
     //======================= Assembly into system
     for (size_t i=0; i<num_nodes; ++i)
     {
-      if (node_boundary_flag[i]) //if dirichlet node
+      if (dirichlet_count[i]>0) //if Dirichlet boundary node
       {
         MatSetValue(A, imap[i], imap[i], 1.0, ADD_VALUES);
-        VecSetValue(b, imap[i], 0.0, ADD_VALUES);
+		// because we use CFEM, a given node is common to several faces
+		const aux = dirichlet_value[i]/dirichlet_count[i]
+        VecSetValue(b, imap[i], aux, ADD_VALUES);
       }
       else
       {
         for (size_t j=0; j<num_nodes; ++j)
         {
-          if (not node_boundary_flag[j])
+          if (dirichlet_count[j]==0) // not related to a dirichlet node
             MatSetValue(A, imap[i], imap[j], Acell[i][j], ADD_VALUES);
+		  else // related to a dirichlet node
+		    const aux = dirichlet_value[j]/dirichlet_count[j]
+			cell_rhs[i] -= Acell[i][j]*aux
         }//for j
         VecSetValue(b, imap[i], cell_rhs[i], ADD_VALUES);
       }
