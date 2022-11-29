@@ -5,6 +5,7 @@
 #include "ChiMath/PETScUtils/petsc_utils.h"
 
 #include "cfem_diffusion_bndry.h"
+#include "ChiTimer/chi_timer.h"
 
 // forword declaration 
 namespace chi_mesh
@@ -25,19 +26,30 @@ namespace cfem_diffusion
 */
 class Solver : public chi_physics::Solver
 {
+private:
+  chi_objects::ChiTimer t_assembly;
+  chi_objects::ChiTimer t_solve;
+
+  double time_assembly=0.0, time_solve=0.0;
+  bool verbose_info=true;
+
 public:
   chi_mesh::MeshContinuumPtr grid_ptr=nullptr;
   chi_math::SDMPtr sdm_ptr =nullptr;
   size_t num_local_dofs = 0;
   size_t num_globl_dofs = 0;
-  Mat A;
-  Vec x, b;
-public:
+
+  Vec            x = nullptr;            // approx solution
+  Vec            b = nullptr;            // RHS
+  Mat            A = nullptr;            // linear system matrix
+
   typedef std::pair<BoundaryType,std::vector<double>> BoundaryInfo;
   typedef std::map<uint, BoundaryInfo> BoundaryPreferences;
-  BoundaryPreferences                      boundary_preferences;
-  std::vector<Boundary*>    boundaries;
-public:
+  BoundaryPreferences      boundary_preferences;
+  std::vector<Boundary*>   boundaries;
+
+  chi_math::UnknownManager                 unknown_manager;
+
   explicit Solver(const std::string& in_solver_name);
   // void Initialize() override;
   void Initialize() override {Initialize(true);}

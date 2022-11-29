@@ -8,7 +8,10 @@
 
 #include "cfem_diffusion_bndry.h"
 
+#include "ChiPhysics/FieldFunction/fieldfunction.h"
+
 #include "ChiMath/SpatialDiscretization/FiniteElement/PiecewiseLinear/pwlc.h"
+#include "ChiPhysics/FieldFunction/fieldfunction.h"
 
 cfem_diffusion::Solver::Solver(const std::string& in_solver_name):
   chi_physics::Solver(in_solver_name,
@@ -23,8 +26,8 @@ void cfem_diffusion::Solver::Initialize(bool verbose)
 {
   chi::log.Log() << "\n"
                      << chi::program_timer.GetTimeString() << " "
-                     << TextName() << ": Initializing Diffusion solver ";
-  // this->verbose_info = verbose;
+                     << TextName() << ": Initializing CFEM Diffusion solver ";
+  this->verbose_info = verbose;
   //============================================= Get grid
   grid_ptr = chi_mesh::GetCurrentHandler().GetGrid();
   const auto& grid = *grid_ptr;
@@ -108,9 +111,9 @@ void cfem_diffusion::Solver::Initialize(bool verbose)
   const auto& sdm = *sdm_ptr;
  
   const auto& OneDofPerNode = sdm.UNITARY_UNKNOWN_MANAGER;
- 
-  num_local_dofs = sdm.GetNumLocalDOFs(OneDofPerNode);
-  num_globl_dofs = sdm.GetNumGlobalDOFs(OneDofPerNode);
+  unknown_manager.AddUnknown(chi_math::UnknownType::SCALAR);
+  num_local_dofs = sdm.GetNumLocalDOFs(unknown_manager);
+  num_globl_dofs = sdm.GetNumGlobalDOFs(unknown_manager);
  
   chi::log.Log() << "Num local DOFs: " << num_local_dofs;
   chi::log.Log() << "Num globl DOFs: " << num_globl_dofs;
@@ -130,8 +133,24 @@ void cfem_diffusion::Solver::Initialize(bool verbose)
   chi_math::PETScUtils::InitMatrixSparsity(A,
                                            nodal_nnz_in_diag,
                                            nodal_nnz_off_diag);  
-}
+  if (field_functions.empty())
+  {
+    auto initial_field_function =
+      std::make_shared<chi_physics::FieldFunction>(
+        std::string("phi"),   //Text name
+        sdm,                  //Spatial Discretization
+        &x,                   //Data vector
+        unknown_manager);       //Unknown Manager
 
+      field_functions.push_back(initial_field_function);
+      chi::fieldfunc_stack.push_back(initial_field_function);
+  }//if not ff set
+//  chi_math::UnknownManager                 unknown_manager;
+
+}//end initialize
+
+
+//========================================================== Execute
 void cfem_diffusion::Solver::Execute()
 {
   chi::log.Log() << "\nExecuting CFEM Diffusion solver";
