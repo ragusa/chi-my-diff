@@ -56,50 +56,49 @@ void cfem_diffusion::Solver::Initialize(bool verbose)
       {
         case BoundaryType::Reflecting:
         {
-          boundaries.push_back(
-            new cfem_diffusion::BoundaryReflecting);
+          boundaries.push_back({BoundaryType::Reflecting, {0.,0.,0.}});
           chi::log.Log() << "Boundary " << bndry << " set to reflecting.";
           break;
         }
         case BoundaryType::Dirichlet:
         {
           if (bndry_vals.empty()) bndry_vals.resize(1,0.0);
-          boundaries.push_back(
-            new cfem_diffusion::BoundaryDirichlet(bndry_vals[0]));
+          boundaries.push_back({BoundaryType::Dirichlet, {bndry_vals[0],0.,0.}});
           chi::log.Log() << "Boundary " << bndry << " set to dirichlet.";
           break;
         }
         case BoundaryType::Robin:
         {
-          if (bndry_vals.size()<3) bndry_vals.resize(3,0.0);
-          boundaries.push_back(
-            new cfem_diffusion::BoundaryRobin(bndry_vals[0],
-                                             bndry_vals[1],
-                                             bndry_vals[2]));
-          chi::log.Log() << "Boundary " << bndry << " set to robin.";
+          if (bndry_vals.size()!=3)
+            throw std::logic_error(std::string(__PRETTY_FUNCTION__) +
+                           " Robin needs 3 values in bndry vals.");
+          boundaries.push_back({BoundaryType::Robin, {bndry_vals[0],
+                                                      bndry_vals[1],
+                                                      bndry_vals[2]}});
+          chi::log.Log() << "Boundary " << bndry << " set to robin." << bndry_vals[0]<<","<<bndry_vals[1]<<","<<bndry_vals[2];
           break;
         }
         case BoundaryType::Vacuum:
         {
-          boundaries.push_back(new cfem_diffusion::BoundaryRobin(0.25,0.5,0.0));
+          boundaries.push_back({BoundaryType::Robin, {0.25,0.5,0.}});
           chi::log.Log() << "Boundary " << bndry << " set to vacuum.";
           break;
         }
         case BoundaryType::Neumann:
         {
-          if (bndry_vals.size()<3) bndry_vals.resize(3,0.0);
-          boundaries.push_back(
-            new cfem_diffusion::BoundaryRobin(bndry_vals[0],
-                                             bndry_vals[1],
-                                             bndry_vals[2]));
-          chi::log.Log() << "Boundary " << bndry << " set to neumann.";
+          if (bndry_vals.size()!=3) 
+            throw std::logic_error(std::string(__PRETTY_FUNCTION__) +
+                           " Neumann needs 3 values in bndry vals.");
+          boundaries.push_back({BoundaryType::Robin, {0.,bndry_vals[0],
+                                                      bndry_vals[1]}});
+          chi::log.Log() << "Boundary " << bndry << " set to neumann." << bndry_vals[0];
           break;
         }
       }//switch boundary type
     }
     else
     {
-      boundaries.push_back(new cfem_diffusion::BoundaryDirichlet);
+      boundaries.push_back({BoundaryType::Dirichlet, {0.,0.,0.}});
       chi::log.Log0Verbose1()
         << "No boundary preference found for boundary index " << bndry
         << "Dirichlet boundary added with zero boundary value.";
@@ -111,9 +110,9 @@ void cfem_diffusion::Solver::Initialize(bool verbose)
   const auto& sdm = *sdm_ptr;
  
   const auto& OneDofPerNode = sdm.UNITARY_UNKNOWN_MANAGER;
-  unknown_manager.AddUnknown(chi_math::UnknownType::SCALAR);
-  num_local_dofs = sdm.GetNumLocalDOFs(unknown_manager);
-  num_globl_dofs = sdm.GetNumGlobalDOFs(unknown_manager);
+  // unknown_manager.AddUnknown(chi_math::UnknownType::SCALAR);
+  num_local_dofs = sdm.GetNumLocalDOFs(OneDofPerNode);
+  num_globl_dofs = sdm.GetNumGlobalDOFs(OneDofPerNode);
  
   chi::log.Log() << "Num local DOFs: " << num_local_dofs;
   chi::log.Log() << "Num globl DOFs: " << num_globl_dofs;
@@ -135,12 +134,13 @@ void cfem_diffusion::Solver::Initialize(bool verbose)
                                            nodal_nnz_off_diag);  
   if (field_functions.empty())
   {
+    auto unk_man = OneDofPerNode;
     auto initial_field_function =
       std::make_shared<chi_physics::FieldFunction>(
         std::string("phi"),   //Text name
-        sdm,                  //Spatial Discretization
+        sdm_ptr,              //Spatial Discretization
         &x,                   //Data vector
-        unknown_manager);       //Unknown Manager
+        unk_man);             //Unknown Manager
 
       field_functions.push_back(initial_field_function);
       chi::fieldfunc_stack.push_back(initial_field_function);
@@ -183,7 +183,7 @@ void cfem_diffusion::Solver::Execute()
         Acell[i][j] = entry_aij;
       }//for j
       for (size_t qp : qp_data.QuadraturePointIndices())
-        cell_rhs[i] += 1.0 * qp_data.ShapeValue(i, qp) * qp_data.JxW(qp);
+        cell_rhs[i] += 0.0 * qp_data.ShapeValue(i, qp) * qp_data.JxW(qp);
     }//for i
  
     //======================= Flag nodes for being on a boundary
@@ -197,22 +197,25 @@ void cfem_diffusion::Solver::Execute()
       // not a boundary face
 	    if (face.has_neighbor) continue; 
 	  
-      // Get type of boundary
-      int ir_boundary_index = cell.faces[f].neighbor_id;
-      auto ir_boundary_type  = boundaries[ir_boundary_index]->type;
-	  
+      const auto& bndry = boundaries[face.neighbor_id];
+
       // Robin boundary
-      if (ir_boundary_type == BoundaryType::Robin)
-      {
-        auto robin_bndry =
-            (cfem_diffusion::BoundaryRobin*)boundaries[ir_boundary_index];
-  
+      if (bndry.type == BoundaryType::Robin)
+      { 
         const auto  qp_face_data = cell_mapping.MakeFaceQuadraturePointData( f );
         const size_t num_face_nodes = face.vertex_ids.size();
 
-        // true Robin when a/=0, otherwise, it is a Neumann:
+        const auto& aval = bndry.values[0];
+        const auto& bval = bndry.values[1];
+        const auto& fval = bndry.values[2];
+
+        chi::log.Log() << "Boundary  set as Robin with a,b,f = ("
+                    << aval << ","
+                    << bval << ","
+                    << fval << ") ";
+        // true Robin when a!=0, otherwise, it is a Neumann:
         // Assert if b=0
-        if (std::fabs(robin_bndry->b) < 1e-8)
+        if (std::fabs(bval) < 1e-8)
           throw std::logic_error("if b=0, this is a Dirichlet BC, not a Robin BC");
         
         // loop over nodes of that face
@@ -223,10 +226,10 @@ void cfem_diffusion::Solver::Execute()
           double entry_rhsi = 0.0;
           for (size_t qp : qp_face_data.QuadraturePointIndices() )
             entry_rhsi +=  qp_face_data.ShapeValue(i, qp) * qp_face_data.JxW(qp);
-          cell_rhs[i] +=  (robin_bndry->f) / (robin_bndry->b) * entry_rhsi;
+          cell_rhs[i] +=  fval / bval * entry_rhsi;
             
           // only do this part if true Robin (i.e., a!=0)
-          if (std::fabs(robin_bndry->a) > 1.0e-8)
+          if (std::fabs(aval) > 1.0e-8)
           {
             for (size_t fj=0; fj<num_face_nodes; ++fj)
             {
@@ -235,25 +238,26 @@ void cfem_diffusion::Solver::Execute()
               double entry_aij = 0.0;
               for (size_t qp : qp_face_data.QuadraturePointIndices())
                 entry_aij +=  qp_face_data.ShapeValue(i, qp) *qp_face_data.ShapeValue(j, qp)
-                                * qp_data.JxW(qp);
-              Acell[i][j] += (robin_bndry->a)/(robin_bndry->b) * entry_aij;
+                                * qp_face_data.JxW(qp);
+              Acell[i][j] += aval / bval * entry_aij;
             }//for fj
           }//end true Robin
         }//for fi
       }//if Robin
 	  
 	    // Dirichlet boundary
-	    if (ir_boundary_type == BoundaryType::Dirichlet)
+	    if (bndry.type == BoundaryType::Dirichlet)
       {
-        auto dirichlet_bndry  =
-          (cfem_diffusion::BoundaryDirichlet*)boundaries[ir_boundary_index];
  		    const size_t num_face_nodes = face.vertex_ids.size();
+
+        const auto& boundary_value = bndry.values[0];
+
         // loop over nodes of that face
         for (size_t fi=0; fi<num_face_nodes; ++fi)
         {
           const uint i = cell_mapping.MapFaceNode(f,fi);
           dirichlet_count[i] += 1;
-          dirichlet_value[i] += dirichlet_bndry->boundary_value;
+          dirichlet_value[i] += boundary_value;
         }//for fi
       }//if Dirichlet
 	  

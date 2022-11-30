@@ -2,7 +2,7 @@
 chiMeshHandlerCreate()
  
 mesh={}
-N=200
+N=4
 L=2
 xmin = -L/2
 dx = L/N
@@ -28,9 +28,9 @@ chiVolumeMesherSetProperty(MATID_FROMLOGICAL,vol0,material)
 -- Setboundary IDs
 -- xmin,xmax,ymin,ymax,zmin,zmax
 e_vol = chiLogicalVolumeCreate(RPP,0.99999,1000,-1000,1000,-1000,1000)
-w_vol = chiLogicalVolumeCreate(RPP,-1000,0.00001,-1000,1000,-1000,1000)
+w_vol = chiLogicalVolumeCreate(RPP,-1000,-0.9999,-1000,1000,-1000,1000)
 n_vol = chiLogicalVolumeCreate(RPP,-1000,1000,0.99999,1000,-1000,1000)
-s_vol = chiLogicalVolumeCreate(RPP,-1000,1000,-1000,0.00001,-1000,1000)
+s_vol = chiLogicalVolumeCreate(RPP,-1000,1000,-1000,-0.99999,-1000,1000)
 
 e_bndry = 0
 w_bndry = 1
@@ -55,10 +55,15 @@ chiPhysicsMaterialSetProperty(material,"q",SINGLE_VALUE,0.0)
 --#### CFEM stuff
 phys1 = chiCFEMDiffusionSolverCreate()
 chiSolverSetBasicOption(phys1, "residual_tolerance", 1E-8)
--- chiDiffusionSetProperty(phys1,"boundary_type",e_bndry,"robin", 0.25, 0.5, 0.0)
--- chiDiffusionSetProperty(phys1,"boundary_type",n_bndry,"reflecting")
--- chiDiffusionSetProperty(phys1,"boundary_type",s_bndry,"reflecting")
--- chiDiffusionSetProperty(phys1,"boundary_type",w_bndry,"robin", 0.25, 0.5, 1.0)
+chiCFEMDiffusionSetProperty(phys1,"boundary_type",e_bndry,"robin", 0.25, 0.5, 0.0)
+chiCFEMDiffusionSetProperty(phys1,"boundary_type",n_bndry,"reflecting")
+chiCFEMDiffusionSetProperty(phys1,"boundary_type",s_bndry,"reflecting")
+chiCFEMDiffusionSetProperty(phys1,"boundary_type",w_bndry,"robin", 0.25, 0.5, 1.0)
+
+-- chiCFEMDiffusionSetProperty(phys1,"boundary_type",n_bndry,"reflecting")
+-- chiCFEMDiffusionSetProperty(phys1,"boundary_type",s_bndry,"reflecting")
+-- chiCFEMDiffusionSetProperty(phys1,"boundary_type",w_bndry,"neumann",2.0)
+-- chiCFEMDiffusionSetProperty(phys1,"boundary_type",e_bndry,"dirichlet",1.0)
 
 chiSolverInitialize(phys1)
 chiSolverExecute(phys1)

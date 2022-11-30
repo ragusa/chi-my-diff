@@ -24,6 +24,7 @@ int main(int argc, char* argv[])
   auto L = console.consoleState;
   RegisterFunction(chiPrintStatus);
   RegisterFunction(chiCFEMDiffusionSolverCreate);
+  RegisterFunction(chiCFEMDiffusionSetProperty);
 
   chi::RunBatch(argc, argv);
 
