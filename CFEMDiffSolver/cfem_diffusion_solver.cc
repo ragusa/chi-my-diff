@@ -13,12 +13,19 @@
 #include "ChiMath/SpatialDiscretization/FiniteElement/PiecewiseLinear/pwlc.h"
 #include "ChiPhysics/FieldFunction/fieldfunction.h"
 
+//============================================= constructor
 cfem_diffusion::Solver::Solver(const std::string& in_solver_name):
-  chi_physics::Solver(in_solver_name,
-  { {"residual_tolerance", 1.0e-2}}
-  )
+  chi_physics::Solver(in_solver_name, { {"max_iters", int64_t(500)   },
+                                        {"residual_tolerance", 1.0e-2}}
+                   )
+{}
+
+//============================================= destructor
+cfem_diffusion::Solver::~Solver()
 {
-  
+  VecDestroy(&x);
+  VecDestroy(&b);
+  MatDestroy(&A);
 }
 
 //============================================= Initialize
@@ -145,10 +152,8 @@ void cfem_diffusion::Solver::Initialize(bool verbose)
       field_functions.push_back(initial_field_function);
       chi::fieldfunc_stack.push_back(initial_field_function);
   }//if not ff set
-//  chi_math::UnknownManager                 unknown_manager;
 
 }//end initialize
-
 
 //========================================================== Execute
 void cfem_diffusion::Solver::Execute()
@@ -156,7 +161,9 @@ void cfem_diffusion::Solver::Execute()
   chi::log.Log() << "\nExecuting CFEM Diffusion solver";
 
   const auto& grid = *grid_ptr;
-  const auto& sdm = *sdm_ptr;
+  const auto& sdm  = *sdm_ptr;
+
+  lua_State* L = chi::console.consoleState;
 
   //============================================= Assemble the system
   chi::log.Log() << "Assembling system: ";
@@ -165,6 +172,7 @@ void cfem_diffusion::Solver::Execute()
     const auto& cell_mapping = sdm.GetCellMapping(cell);
     const auto  qp_data      = cell_mapping.MakeVolumeQuadraturePointData();
  
+    const auto imat  = cell.material_id;
     const size_t num_nodes = cell_mapping.NumNodes();
     MatDbl Acell(num_nodes, VecDbl(num_nodes, 0.0));
     VecDbl cell_rhs(num_nodes, 0.0);
@@ -177,13 +185,20 @@ void cfem_diffusion::Solver::Execute()
         for (size_t qp : qp_data.QuadraturePointIndices())
         {
           entry_aij +=
-            qp_data.ShapeGrad(i, qp).Dot(qp_data.ShapeGrad(j, qp)) *
+            (
+              CallLua_iXYZFunction(L, "D_coef",imat,qp_data.QPointXYZ(qp))  *
+              qp_data.ShapeGrad(i, qp).Dot(qp_data.ShapeGrad(j, qp))
+              +
+              CallLua_iXYZFunction(L, "Sigma_a",imat,qp_data.QPointXYZ(qp))  *
+              qp_data.ShapeValue(i, qp) * qp_data.ShapeValue(j, qp)
+            )
+            *
             qp_data.JxW(qp);
         }//for qp
         Acell[i][j] = entry_aij;
       }//for j
       for (size_t qp : qp_data.QuadraturePointIndices())
-        cell_rhs[i] += 0.0 * qp_data.ShapeValue(i, qp) * qp_data.JxW(qp);
+        cell_rhs[i] += CallLua_iXYZFunction(L,"Q_ext",imat,qp_data.QPointXYZ(qp)) * qp_data.ShapeValue(i, qp) * qp_data.JxW(qp);
     }//for i
  
     //======================= Flag nodes for being on a boundary
@@ -313,7 +328,8 @@ void cfem_diffusion::Solver::Execute()
       KSPCG,           //Solver type
       PCGAMG,          //Preconditioner type
       basic_options("residual_tolerance").FloatValue(),  //Relative residual tolerance
-      1000);           //Max iterations
+      basic_options("max_iters").IntegerValue()          //Max iterations
+      );
  
   //============================================= Solve
   KSPSolve(petsc_solver.ksp,b,x);

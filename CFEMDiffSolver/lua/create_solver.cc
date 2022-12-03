@@ -11,7 +11,7 @@
 
 \return Handle int Handle to the created solver.
 \ingroup LuaDiffusion
-\author Jan*/
+*/
 int chiCFEMDiffusionSolverCreate(lua_State *L)
 {
   const std::string fname = __FUNCTION__;

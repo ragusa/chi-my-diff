@@ -2,7 +2,7 @@
 chiMeshHandlerCreate()
  
 mesh={}
-N=4
+N=100
 L=2
 xmin = -L/2
 dx = L/N
@@ -11,24 +11,20 @@ for i=1,(N+1) do
     mesh[i] = xmin + k*dx
 end
  
---chiMeshCreateUnpartitioned3DOrthoMesh(mesh,mesh,mesh)
 chiMeshCreateUnpartitioned2DOrthoMesh(mesh,mesh)
---chiMeshCreateUnpartitioned1DOrthoMesh(mesh)
 chiVolumeMesherExecute();
  
 --############################################### Set Material IDs
 --chiVolumeMesherSetMatIDToAll(0)
-
-
---############################################### Set Material IDs
-material = chiPhysicsAddMaterial("Homogenous_Material");
--- Set Material IDs
 vol0 = chiLogicalVolumeCreate(RPP,-1000,1000,-1000,1000,-1000,1000)
-chiVolumeMesherSetProperty(MATID_FROMLOGICAL,vol0,material)
+chiVolumeMesherSetProperty(MATID_FROMLOGICAL,vol0,0)
 
-D = {1.1}
-Q = {1.2}
-XSa = {1.3}
+vol1 = chiLogicalVolumeCreate(RPP,-0.5,0.5,-0.5,0.5,-1000,1000)
+chiVolumeMesherSetProperty(MATID_FROMLOGICAL,vol1,1)
+
+D = {1.0,500}
+Q = {0.0,1.0}
+XSa = {1.0,0.0}
 function D_coef(i,x,y,z)
     return D[i+1]
 end
@@ -60,20 +56,14 @@ chiVolumeMesherSetProperty(BNDRYID_FROMLOGICAL,s_vol,s_bndry)
 --chiMeshHandlerExportMeshToVTK("Mesh")
 
 --############################################### Add material properties
--- Set material properties
-chiPhysicsMaterialAddProperty(material,SCALAR_VALUE,"D")
-chiPhysicsMaterialSetProperty(material,"D",SINGLE_VALUE,1.0)
-
-chiPhysicsMaterialAddProperty(material,SCALAR_VALUE,"q")
-chiPhysicsMaterialSetProperty(material,"q",SINGLE_VALUE,0.0)
-
 --#### CFEM stuff
 phys1 = chiCFEMDiffusionSolverCreate()
+
 chiSolverSetBasicOption(phys1, "residual_tolerance", 1E-8)
 chiCFEMDiffusionSetBCProperty(phys1,"boundary_type",e_bndry,"robin", 0.25, 0.5, 0.0)
 chiCFEMDiffusionSetBCProperty(phys1,"boundary_type",n_bndry,"reflecting")
 chiCFEMDiffusionSetBCProperty(phys1,"boundary_type",s_bndry,"reflecting")
-chiCFEMDiffusionSetBCProperty(phys1,"boundary_type",w_bndry,"robin", 0.25, 0.5, 1.0)
+chiCFEMDiffusionSetBCProperty(phys1,"boundary_type",w_bndry,"robin", 0.25, 0.5, 0.0)
 
 -- chiCFEMDiffusionSetProperty(phys1,"boundary_type",n_bndry,"reflecting")
 -- chiCFEMDiffusionSetProperty(phys1,"boundary_type",s_bndry,"reflecting")
@@ -85,4 +75,4 @@ chiSolverExecute(phys1)
 
 ----############################################### Visualize the field function
 fflist,count = chiGetFieldFunctionList(phys1)
-chiExportFieldFunctionToVTK(fflist[1],"CFEM","Flux_Diff")
+chiExportFieldFunctionToVTK(fflist[1],"square","Flux_Diff")

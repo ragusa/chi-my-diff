@@ -1,5 +1,5 @@
-#ifndef CHI_CFEM_DIFFUSION_SOLVER_H
-#define CHI_CFEM_DIFFUSION_SOLVER_H
+#ifndef CFEM_DIFFUSION_SOLVER_H
+#define CFEM_DIFFUSION_SOLVER_H
 
 #include "ChiPhysics/SolverBase/chi_solver.h"
 #include "ChiMath/PETScUtils/petsc_utils.h"
@@ -7,7 +7,9 @@
 #include "cfem_diffusion_bndry.h"
 #include "ChiTimer/chi_timer.h"
 
-// forword declaration 
+#include "ChiConsole/chi_console.h"
+
+// forward declaration
 namespace chi_mesh
 {
 class MeshContinuum; 
@@ -35,7 +37,9 @@ private:
 
 public:
   chi_mesh::MeshContinuumPtr grid_ptr=nullptr;
+
   chi_math::SDMPtr sdm_ptr =nullptr;
+
   size_t num_local_dofs = 0;
   size_t num_globl_dofs = 0;
 
@@ -48,17 +52,25 @@ public:
   BoundaryPreferences      boundary_preferences;
   std::vector<Boundary>   boundaries;
 
-  // chi_math::UnknownManager                 unknown_manager;
-
   explicit Solver(const std::string& in_solver_name);
+  virtual ~Solver();
+
   // void Initialize() override;
   void Initialize() override {Initialize(true);}
   void Initialize(bool verbose);
+
   void Execute() override;
+
+  static
+  double CallLua_iXYZFunction(lua_State* L,
+                              const std::string&,
+                              const int,
+                              const chi_mesh::Vector3&);
+
 };
 
 }; // namespace cfem_diffusion
 
 
-#endif // CHI_CFEM_DIFFUSION_SOLVER_H
+#endif //CFEM_DIFFUSION_SOLVER_H
 

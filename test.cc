@@ -5,10 +5,6 @@
 
 #include "ChiMacros/lua_register_macro.h"
 
-// #include "ChiMesh/MeshHandler/chi_meshhandler.h"
-// #include "ChiMesh/MeshContinuum/chi_meshcontinuum.h"
-
-// #include "ChiMath/SpatialDiscretization/FiniteVolume/fv.h"
 // #include "ChiMath/PETScUtils/petsc_utils.h"
  
 // #include "ChiPhysics/FieldFunction2/fieldfunction2.h"
@@ -24,7 +20,7 @@ int main(int argc, char* argv[])
   auto L = console.consoleState;
   RegisterFunction(chiPrintStatus);
   RegisterFunction(chiCFEMDiffusionSolverCreate);
-  RegisterFunction(chiCFEMDiffusionSetProperty);
+  RegisterFunction(chiCFEMDiffusionSetBCProperty);
 
   chi::RunBatch(argc, argv);
 

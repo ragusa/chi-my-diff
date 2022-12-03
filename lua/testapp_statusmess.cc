@@ -5,6 +5,5 @@
 int chiPrintStatus(lua_State *L)
 {
     chi::log.Log() << "\nHello from lua function";
-
     return 0;
 }

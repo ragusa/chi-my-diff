@@ -22,7 +22,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
 add_subdirectory("${PROJECT_SOURCE_DIR}/CFEMDiffSolver")
  
 file (GLOB_RECURSE SOURCES "*.cc")
-add_executable(${TARGET} "${SOURCES}")
+add_executable(${TARGET} "${SOURCES}" CFEMDiffSolver/cfem_diffusion_utlis.cc)
 target_link_libraries(${TARGET} ${CHI_LIBS} lua ${VTK_LIBRARIES})
  
 file(WRITE ${PROJECT_SOURCE_DIR}/Makefile "subsystem:\n" "\t$(MAKE) -C chi_build \n\n"

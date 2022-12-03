@@ -43,3 +43,4 @@ Makefile
 chi_build/Makefile
 chi_build/CFEMDiffSolver/*
 
+.idea/*

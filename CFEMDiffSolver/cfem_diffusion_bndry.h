@@ -1,5 +1,5 @@
-#ifndef CHI_CFEM_DIFFUSION_BOUNDARY_H
-#define CHI_CFEM_DIFFUSION_BOUNDARY_H
+#ifndef CFEM_DIFFUSION_BOUNDARY_H
+#define CFEM_DIFFUSION_BOUNDARY_H
 
 namespace cfem_diffusion
 {
@@ -101,6 +101,4 @@ class cfem_diffusion::Boundary
 //   }
 
 // };
-
-
-#endif //CHI_CFEM_DIFFUSION_BOUNDARY_H
+#endif //CFEM_DIFFUSION_BOUNDARY_H
